@@ -21,8 +21,10 @@ function doGet() {
 
     <div id="topicsContainer" style="display:none; margin-top: 20px;">
       <h3>Step 2: Select Topics</h3>
-      <div id="topicsList"></div>
-      <label style="margin-top: 10px; display: block;">
+      <div id="topicsList">
+        <div class="loading-spinner"></div>
+      </div>
+      <label id="selectAllContainer" style="margin-top: 10px; display: none;">
         <input type="checkbox" id="selectAll" onclick="toggleAllTopics()"> Select All Topics
       </label>
     </div>
@@ -37,14 +39,32 @@ function doGet() {
     </div>
 
     <div id="status" style="margin-top: 20px; color: #666;"></div>
+    <div id="folderLink" style="margin-top: 10px; display: none;"></div>
     <div id="progress" style="margin-top: 10px; display: none;">
       <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px;">
         <div id="progressBar" style="height: 20px; width: 0%; background-color: #4CAF50; border-radius: 4px; transition: width 0.3s;"></div>
       </div>
     </div>
 
+    <style>
+      .loading-spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 2s linear infinite;
+        margin: 20px auto;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+
     <script>
       let downloadInProgress = false;
+      let folderUrl = '';
       
       // Load courses on page load
       google.script.run
@@ -66,6 +86,8 @@ function doGet() {
 
         document.getElementById('status').innerHTML = 'Loading topics...';
         document.getElementById('topicsContainer').style.display = 'block';
+        document.getElementById('topicsList').innerHTML = '<div class="loading-spinner"></div>';
+        document.getElementById('selectAllContainer').style.display = 'none';
         
         google.script.run
           .withSuccessHandler(showTopics)
@@ -78,6 +100,7 @@ function doGet() {
         if (topics.length === 0) {
           div.innerHTML = '<p>No topics found in this course</p>';
           document.getElementById('downloadBtn').disabled = false;
+          document.getElementById('selectAllContainer').style.display = 'none';
           return;
         }
 
@@ -92,6 +115,7 @@ function doGet() {
 
         document.getElementById('downloadBtn').disabled = false;
         document.getElementById('status').innerHTML = '';
+        document.getElementById('selectAllContainer').style.display = 'block';
       }
 
       function toggleAllTopics() {
@@ -105,16 +129,30 @@ function doGet() {
         const topicCheckboxes = document.querySelectorAll('input[name="topic"]:checked');
         const topicIds = Array.from(topicCheckboxes).map(cb => cb.value);
 
-        document.getElementById('status').innerHTML = 'Downloading assignments...';
+        document.getElementById('status').innerHTML = '<div class="loading-spinner" style="display:inline-block; width:20px; height:20px; vertical-align:middle; margin-right:10px;"></div> Preparing download...';
         document.getElementById('downloadBtn').disabled = true;
         document.getElementById('cancelBtn').style.display = 'block';
         document.getElementById('progress').style.display = 'block';
+        document.getElementById('folderLink').style.display = 'none';
         downloadInProgress = true;
         
+        // First get the folder URL
         google.script.run
-          .withSuccessHandler(showSuccess)
+          .withSuccessHandler(function(folderInfo) {
+            folderUrl = folderInfo.url;
+            document.getElementById('folderLink').innerHTML = 
+              \`<a href="\${folderUrl}" target="_blank">Open folder in Google Drive</a>\`;
+            document.getElementById('folderLink').style.display = 'block';
+            document.getElementById('status').innerHTML = 'Downloading assignments...';
+            
+            // Then start the actual download
+            google.script.run
+              .withSuccessHandler(showSuccess)
+              .withFailureHandler(showError)
+              .downloadAssignments(courseId, topicIds, folderInfo.id);
+          })
           .withFailureHandler(showError)
-          .downloadAssignments(courseId, topicIds);
+          .createDownloadFolder(courseId);
       }
       
       function cancelDownload() {
@@ -231,17 +269,17 @@ function cancelDownload() {
 /**
  * Main function to download assignments
  */
-function downloadAssignments(courseId, topicIds) {
+function downloadAssignments(courseId, topicIds, rootFolderId) {
   try {
     // Reset cancel flag
     shouldCancelDownload = false;
     
+    // Get the root folder by ID
+    const rootFolder = DriveApp.getFolderById(rootFolderId);
+    
     // Verify course exists
     const courseDetails = Classroom.Courses.get(courseId);
     const courseName = courseDetails.name;
-    
-    // Create main folder
-    const rootFolder = DriveApp.createFolder('Classroom Downloads - ' + courseName);
     
     // Get students and course work
     const students = getAllStudents(courseId);
@@ -470,4 +508,26 @@ function createLinkFile(link, folder, baseFilename) {
   const content = 'URL: ' + link.url;
   const newFilename = baseFilename + '_link.txt';
   folder.createFile(newFilename, content);
+}
+
+/**
+ * Creates the download folder and returns its URL
+ */
+function createDownloadFolder(courseId) {
+  try {
+    // Verify course exists
+    const courseDetails = Classroom.Courses.get(courseId);
+    const courseName = courseDetails.name;
+    
+    // Create main folder
+    const rootFolder = DriveApp.createFolder('Classroom Downloads - ' + courseName);
+    
+    return {
+      id: rootFolder.getId(),
+      url: rootFolder.getUrl()
+    };
+  } catch (error) {
+    Logger.log("Error creating folder: " + error);
+    throw new Error("Failed to create download folder: " + error.message);
+  }
 }
