@@ -310,18 +310,40 @@ function downloadAssignments(courseId, topicIds) {
           continue;
         }
         
-        // Get clean student name
-        const studentName = student.profile.name || student.profile.emailAddress || studentId.toString();
+        // Get clean student name - ensure it's a string
+        const rawStudentName = student.profile.name || student.profile.emailAddress || studentId.toString();
+        const studentName = String(rawStudentName); // Force conversion to string
         
-        // Better regex to clean up student names with prefixes and duplicates
-        const cleanStudentName = String(studentName)
-          // First remove the prefixes
+        // Log the raw student name for debugging
+        Logger.log("Raw student name: " + studentName);
+        
+        // Extract the actual name by removing all known prefixes and duplicates
+        let cleanStudentName = studentName
+          // Remove all the prefix markers
           .replace(/fullName|givenName|familyName/g, '')
-          // Then extract just the actual name by finding word sequences
-          .match(/([A-Za-z]+\s*[A-Za-z]+)/g)?.[0] || studentName
-          // Remove any remaining special characters
-          .replace(/[^\w\s-]/g, '')
+          // Remove any non-alphanumeric characters except spaces
+          .replace(/[^\w\s]/g, ' ')
+          // Replace multiple spaces with a single space
+          .replace(/\s+/g, ' ')
           .trim();
+        
+        // Check for duplicate words and remove them
+        const nameParts = cleanStudentName.split(' ');
+        const uniqueParts = [];
+        for (const part of nameParts) {
+          if (!uniqueParts.includes(part)) {
+            uniqueParts.push(part);
+          }
+        }
+        cleanStudentName = uniqueParts.join(' ');
+        
+        // If name is empty, use a fallback
+        if (!cleanStudentName) {
+          cleanStudentName = "Student-" + studentId;
+        }
+        
+        // Log the cleaned name
+        Logger.log("Cleaned student name: " + cleanStudentName);
         
         // Use existing student folder or create a new one for this topic
         let studentFolder;
