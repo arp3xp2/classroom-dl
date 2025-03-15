@@ -10,193 +10,391 @@
  */
 function doGet() {
   const html = HtmlService.createHtmlOutput(`
-    <h2>Google Classroom Assignment Downloader</h2>
-    
-    <div>
-      <h3>Step 1: Select Course</h3>
-      <select id="courseSelect" style="width: 100%; margin: 10px 0;" onchange="loadTopics()">
-        <option value="">Loading courses...</option>
-      </select>
-    </div>
-
-    <div id="topicsContainer" style="display:none; margin-top: 20px;">
-      <h3>Step 2: Select Topics</h3>
-      <div id="topicsList">
-        <div class="loading-spinner"></div>
-      </div>
-      <label id="selectAllContainer" style="margin-top: 10px; display: none;">
-        <input type="checkbox" id="selectAll" onclick="toggleAllTopics()"> Select All Topics
-      </label>
-    </div>
-
-    <div style="margin-top: 20px; display: flex; gap: 10px;">
-      <button id="downloadBtn" onclick="downloadSelected()" style="padding: 10px; flex: 1;" disabled>
-        Download Selected Assignments
-      </button>
-      <button id="cancelBtn" onclick="cancelDownload()" style="padding: 10px; flex: 1; display: none; background-color: #f44336; color: white;">
-        Cancel Download
-      </button>
-    </div>
-
-    <div id="status" style="margin-top: 20px; color: #666;"></div>
-    <div id="folderLink" style="margin-top: 10px; display: none;"></div>
-    <div id="progress" style="margin-top: 10px; display: none;">
-      <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px;">
-        <div id="progressBar" style="height: 20px; width: 0%; background-color: #4CAF50; border-radius: 4px; transition: width 0.3s;"></div>
-      </div>
-    </div>
-
-    <style>
-      .loading-spinner {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        animation: spin 2s linear infinite;
-        margin: 20px auto;
-      }
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    </style>
-
-    <script>
-      let downloadInProgress = false;
-      let folderUrl = '';
-      
-      // Load courses on page load
-      google.script.run
-        .withSuccessHandler(showCourses)
-        .withFailureHandler(showError)
-        .listCourses();
-
-      function showCourses(courses) {
-        const select = document.getElementById('courseSelect');
-        select.innerHTML = '<option value="">Select a course...</option>';
-        courses.forEach(course => {
-          select.innerHTML += \`<option value="\${course.id}">\${course.name}</option>\`;
-        });
-      }
-
-      function loadTopics() {
-        const courseId = document.getElementById('courseSelect').value;
-        if (!courseId) return;
-
-        document.getElementById('status').innerHTML = 'Loading topics...';
-        document.getElementById('topicsContainer').style.display = 'block';
-        document.getElementById('topicsList').innerHTML = '<div class="loading-spinner"></div>';
-        document.getElementById('selectAllContainer').style.display = 'none';
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <base target="_top">
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Classroom Assignment Downloader</title>
+      <style>
+        body {
+          font-family: 'Google Sans', Roboto, Arial, sans-serif;
+          line-height: 1.6;
+          color: #202124;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f8f9fa;
+        }
         
-        google.script.run
-          .withSuccessHandler(showTopics)
-          .withFailureHandler(showError)
-          .getTopics(courseId);
-      }
+        h2 {
+          color: #1a73e8;
+          margin-bottom: 24px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #dadce0;
+        }
+        
+        h3 {
+          color: #202124;
+          margin-top: 24px;
+          margin-bottom: 12px;
+          font-weight: 500;
+        }
+        
+        select, button {
+          font-family: 'Google Sans', Roboto, Arial, sans-serif;
+          font-size: 14px;
+          border-radius: 4px;
+          border: 1px solid #dadce0;
+          padding: 8px 16px;
+          background-color: white;
+          transition: all 0.2s;
+        }
+        
+        select {
+          width: 100%;
+          margin: 10px 0;
+          height: 40px;
+          cursor: pointer;
+        }
+        
+        select:focus {
+          outline: none;
+          border-color: #1a73e8;
+          box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+        
+        button {
+          cursor: pointer;
+          font-weight: 500;
+          min-height: 40px;
+        }
+        
+        button:hover:not(:disabled) {
+          background-color: #f1f3f4;
+        }
+        
+        button:focus {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+        
+        button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
+        #downloadBtn {
+          background-color: #1a73e8;
+          color: white;
+        }
+        
+        #downloadBtn:hover:not(:disabled) {
+          background-color: #1765cc;
+        }
+        
+        #cancelBtn {
+          background-color: #ea4335;
+          color: white;
+        }
+        
+        #cancelBtn:hover:not(:disabled) {
+          background-color: #d93025;
+        }
+        
+        .button-container {
+          display: flex;
+          gap: 12px;
+          margin-top: 24px;
+        }
+        
+        .topic-item {
+          margin: 8px 0;
+          padding: 8px;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+        }
+        
+        .topic-item:hover {
+          background-color: #f1f3f4;
+        }
+        
+        .topic-item label {
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+        }
+        
+        .topic-item input {
+          margin-right: 10px;
+        }
+        
+        #selectAllContainer {
+          margin-top: 16px;
+          padding: 8px;
+          border-top: 1px solid #dadce0;
+          display: flex;
+          align-items: center;
+        }
+        
+        #selectAllContainer input {
+          margin-right: 10px;
+        }
+        
+        #status {
+          margin-top: 24px;
+          color: #5f6368;
+          min-height: 24px;
+        }
+        
+        #folderLink {
+          margin-top: 12px;
+        }
+        
+        #folderLink a {
+          color: #1a73e8;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+        }
+        
+        #folderLink a:hover {
+          text-decoration: underline;
+        }
+        
+        #folderLink a::before {
+          content: '';
+          display: inline-block;
+          width: 18px;
+          height: 18px;
+          margin-right: 8px;
+          background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%231a73e8"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/><path d="M7 12h10v2H7z"/><path d="M7 7h10v2H7z"/><path d="M7 17h7v2H7z"/></svg>');
+          background-size: contain;
+        }
+        
+        .progress-container {
+          margin-top: 16px;
+          background-color: #e8eaed;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+        
+        .progress-bar {
+          height: 4px;
+          background-color: #1a73e8;
+          width: 0%;
+          transition: width 0.3s ease;
+        }
+        
+        .loading-spinner {
+          border: 3px solid rgba(26, 115, 232, 0.2);
+          border-top: 3px solid #1a73e8;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          animation: spin 1.5s linear infinite;
+          margin: 20px auto;
+          display: inline-block;
+        }
+        
+        .inline-spinner {
+          width: 16px;
+          height: 16px;
+          margin-right: 8px;
+          vertical-align: middle;
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .card {
+          background-color: white;
+          border-radius: 8px;
+          box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+          padding: 24px;
+          margin-bottom: 24px;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>Google Classroom Assignment Downloader</h2>
+      
+      <div class="card">
+        <h3>Step 1: Select Course</h3>
+        <select id="courseSelect" onchange="loadTopics()">
+          <option value="">Loading courses...</option>
+        </select>
+      </div>
+      
+      <div id="topicsContainer" class="card" style="display:none;">
+        <h3>Step 2: Select Topics</h3>
+        <div id="topicsList">
+          <div class="loading-spinner"></div>
+        </div>
+        <div id="selectAllContainer" style="display:none;">
+          <input type="checkbox" id="selectAll" onclick="toggleAllTopics()">
+          <label for="selectAll">Select All Topics</label>
+        </div>
+      </div>
+      
+      <div class="button-container">
+        <button id="downloadBtn" onclick="downloadSelected()" disabled>
+          Download Selected Assignments
+        </button>
+        <button id="cancelBtn" onclick="cancelDownload()" style="display:none;">
+          Cancel Download
+        </button>
+      </div>
+      
+      <div id="status"></div>
+      <div id="folderLink" style="display:none;"></div>
+      <div id="progress" style="display:none;" class="progress-container">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
 
-      function showTopics(topics) {
-        const div = document.getElementById('topicsList');
-        if (topics.length === 0) {
-          div.innerHTML = '<p>No topics found in this course</p>';
-          document.getElementById('downloadBtn').disabled = false;
-          document.getElementById('selectAllContainer').style.display = 'none';
-          return;
+      <script>
+        let downloadInProgress = false;
+        let folderUrl = '';
+        
+        // Load courses on page load
+        google.script.run
+          .withSuccessHandler(showCourses)
+          .withFailureHandler(showError)
+          .listCourses();
+
+        function showCourses(courses) {
+          const select = document.getElementById('courseSelect');
+          select.innerHTML = '<option value="">Select a course...</option>';
+          courses.forEach(course => {
+            select.innerHTML += \`<option value="\${course.id}">\${course.name}</option>\`;
+          });
         }
 
-        div.innerHTML = topics.map(topic => \`
-          <div style="margin: 5px 0;">
-            <label>
-              <input type="checkbox" name="topic" value="\${topic.id}">
-              \${topic.name}
-            </label>
-          </div>
-        \`).join('');
+        function loadTopics() {
+          const courseId = document.getElementById('courseSelect').value;
+          if (!courseId) return;
 
-        document.getElementById('downloadBtn').disabled = false;
-        document.getElementById('status').innerHTML = '';
-        document.getElementById('selectAllContainer').style.display = 'block';
-      }
+          document.getElementById('status').innerHTML = '<div class="loading-spinner inline-spinner"></div> Loading topics...';
+          document.getElementById('topicsContainer').style.display = 'block';
+          document.getElementById('topicsList').innerHTML = '<div class="loading-spinner"></div>';
+          document.getElementById('selectAllContainer').style.display = 'none';
+          
+          google.script.run
+            .withSuccessHandler(showTopics)
+            .withFailureHandler(showError)
+            .getTopics(courseId);
+        }
 
-      function toggleAllTopics() {
-        const checked = document.getElementById('selectAll').checked;
-        document.querySelectorAll('input[name="topic"]')
-          .forEach(box => box.checked = checked);
-      }
-
-      function downloadSelected() {
-        const courseId = document.getElementById('courseSelect').value;
-        const topicCheckboxes = document.querySelectorAll('input[name="topic"]:checked');
-        const topicIds = Array.from(topicCheckboxes).map(cb => cb.value);
-
-        document.getElementById('status').innerHTML = '<div class="loading-spinner" style="display:inline-block; width:20px; height:20px; vertical-align:middle; margin-right:10px;"></div> Preparing download...';
-        document.getElementById('downloadBtn').disabled = true;
-        document.getElementById('cancelBtn').style.display = 'block';
-        document.getElementById('progress').style.display = 'block';
-        document.getElementById('folderLink').style.display = 'none';
-        downloadInProgress = true;
-        
-        // First get the folder URL
-        google.script.run
-          .withSuccessHandler(function(folderInfo) {
-            folderUrl = folderInfo.url;
-            document.getElementById('folderLink').innerHTML = 
-              \`<a href="\${folderUrl}" target="_blank">Open folder in Google Drive</a>\`;
-            document.getElementById('folderLink').style.display = 'block';
-            document.getElementById('status').innerHTML = 'Downloading assignments...';
-            
-            // Then start the actual download
-            google.script.run
-              .withSuccessHandler(showSuccess)
-              .withFailureHandler(showError)
-              .downloadAssignments(courseId, topicIds, folderInfo.id);
-          })
-          .withFailureHandler(showError)
-          .createDownloadFolder(courseId);
-      }
-      
-      function cancelDownload() {
-        if (!downloadInProgress) return;
-        
-        document.getElementById('status').innerHTML = 'Cancelling download...';
-        
-        google.script.run
-          .withSuccessHandler(function() {
-            downloadInProgress = false;
-            document.getElementById('status').innerHTML = 'Download cancelled';
+        function showTopics(topics) {
+          const div = document.getElementById('topicsList');
+          if (topics.length === 0) {
+            div.innerHTML = '<p>No topics found in this course. All assignments will be downloaded.</p>';
             document.getElementById('downloadBtn').disabled = false;
-            document.getElementById('cancelBtn').style.display = 'none';
-            document.getElementById('progress').style.display = 'none';
-          })
-          .withFailureHandler(showError)
-          .cancelDownload();
-      }
+            document.getElementById('selectAllContainer').style.display = 'none';
+            document.getElementById('status').innerHTML = '';
+            return;
+          }
 
-      function showSuccess(message) {
-        downloadInProgress = false;
-        document.getElementById('status').innerHTML = message;
-        document.getElementById('downloadBtn').disabled = false;
-        document.getElementById('cancelBtn').style.display = 'none';
-        document.getElementById('progressBar').style.width = '100%';
+          div.innerHTML = topics.map(topic => \`
+            <div class="topic-item">
+              <label>
+                <input type="checkbox" name="topic" value="\${topic.id}">
+                \${topic.name}
+              </label>
+            </div>
+          \`).join('');
+
+          document.getElementById('downloadBtn').disabled = false;
+          document.getElementById('status').innerHTML = '';
+          document.getElementById('selectAllContainer').style.display = 'flex';
+        }
+
+        function toggleAllTopics() {
+          const checked = document.getElementById('selectAll').checked;
+          document.querySelectorAll('input[name="topic"]')
+            .forEach(box => box.checked = checked);
+        }
+
+        function downloadSelected() {
+          const courseId = document.getElementById('courseSelect').value;
+          const topicCheckboxes = document.querySelectorAll('input[name="topic"]:checked');
+          const topicIds = Array.from(topicCheckboxes).map(cb => cb.value);
+
+          document.getElementById('status').innerHTML = '<div class="loading-spinner inline-spinner"></div> Preparing download...';
+          document.getElementById('downloadBtn').disabled = true;
+          document.getElementById('cancelBtn').style.display = 'block';
+          document.getElementById('progress').style.display = 'block';
+          document.getElementById('folderLink').style.display = 'none';
+          document.getElementById('progressBar').style.width = '10%';
+          downloadInProgress = true;
+          
+          // First get the folder URL
+          google.script.run
+            .withSuccessHandler(function(folderInfo) {
+              folderUrl = folderInfo.url;
+              document.getElementById('folderLink').innerHTML = 
+                \`<a href="\${folderUrl}" target="_blank">Open folder in Google Drive</a>\`;
+              document.getElementById('folderLink').style.display = 'block';
+              document.getElementById('status').innerHTML = '<div class="loading-spinner inline-spinner"></div> Downloading assignments...';
+              document.getElementById('progressBar').style.width = '30%';
+              
+              // Then start the actual download
+              google.script.run
+                .withSuccessHandler(showSuccess)
+                .withFailureHandler(showError)
+                .downloadAssignments(courseId, topicIds, folderInfo.id);
+            })
+            .withFailureHandler(showError)
+            .createDownloadFolder(courseId);
+        }
         
-        // Reset progress bar after 2 seconds
-        setTimeout(() => {
-          document.getElementById('progress').style.display = 'none';
-          document.getElementById('progressBar').style.width = '0%';
-        }, 2000);
-      }
+        function cancelDownload() {
+          if (!downloadInProgress) return;
+          
+          document.getElementById('status').innerHTML = '<div class="loading-spinner inline-spinner"></div> Cancelling download...';
+          
+          google.script.run
+            .withSuccessHandler(function() {
+              downloadInProgress = false;
+              document.getElementById('status').innerHTML = 'Download cancelled';
+              document.getElementById('downloadBtn').disabled = false;
+              document.getElementById('cancelBtn').style.display = 'none';
+              document.getElementById('progress').style.display = 'none';
+            })
+            .withFailureHandler(showError)
+            .cancelDownload();
+        }
 
-      function showError(error) {
-        downloadInProgress = false;
-        document.getElementById('status').innerHTML = 'Error: ' + error;
-        document.getElementById('downloadBtn').disabled = false;
-        document.getElementById('cancelBtn').style.display = 'none';
-        document.getElementById('progress').style.display = 'none';
-      }
-    </script>
+        function showSuccess(message) {
+          downloadInProgress = false;
+          document.getElementById('status').innerHTML = message;
+          document.getElementById('downloadBtn').disabled = false;
+          document.getElementById('cancelBtn').style.display = 'none';
+          document.getElementById('progressBar').style.width = '100%';
+          
+          // Reset progress bar after 3 seconds
+          setTimeout(() => {
+            document.getElementById('progress').style.display = 'none';
+            document.getElementById('progressBar').style.width = '0%';
+          }, 3000);
+        }
+
+        function showError(error) {
+          downloadInProgress = false;
+          document.getElementById('status').innerHTML = 'Error: ' + error;
+          document.getElementById('downloadBtn').disabled = false;
+          document.getElementById('cancelBtn').style.display = 'none';
+          document.getElementById('progress').style.display = 'none';
+        }
+      </script>
+    </body>
+    </html>
   `);
   
-  return html.setTitle('Classroom Assignment Downloader');
+  return html.setTitle('Classroom Assignment Downloader').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 /**
@@ -302,8 +500,15 @@ function downloadAssignments(courseId, topicIds, rootFolderId) {
         topicFolders[id] = rootFolder.createFolder(name);
       });
       
-      // Add uncategorized folder
-      topicFolders['no-topic'] = rootFolder.createFolder('Uncategorized');
+      // Only add uncategorized folder if we have assignments without topics
+      const hasUncategorizedAssignments = courseWork.some(work => 
+        (!work.topicId || work.topicId === 'no-topic') && 
+        (!topicIds.length || topicIds.includes(work.topicId))
+      );
+      
+      if (hasUncategorizedAssignments) {
+        topicFolders['no-topic'] = rootFolder.createFolder('Uncategorized');
+      }
     }
     
     // Create a map to track student folders by topic
