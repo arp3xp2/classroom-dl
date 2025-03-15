@@ -314,35 +314,55 @@ function downloadAssignments(courseId, topicIds) {
         const rawStudentName = student.profile.name || student.profile.emailAddress || studentId.toString();
         const studentName = String(rawStudentName); // Force conversion to string
         
-        // Log the raw student name for debugging
+        // Log the raw student name and profile structure for debugging
         Logger.log("Raw student name: " + studentName);
+        Logger.log("Student profile structure: " + JSON.stringify(student.profile));
         
-        // Extract the actual name by removing all known prefixes and duplicates
-        let cleanStudentName = studentName
-          // Remove all the prefix markers
-          .replace(/fullName|givenName|familyName/g, '')
-          // Remove any non-alphanumeric characters except spaces
-          .replace(/[^\w\s]/g, ' ')
-          // Replace multiple spaces with a single space
-          .replace(/\s+/g, ' ')
-          .trim();
+        // Try to extract first and last name consistently
+        let firstName = "";
+        let lastName = "";
         
-        // Check for duplicate words and remove them
-        const nameParts = cleanStudentName.split(' ');
-        const uniqueParts = [];
-        for (const part of nameParts) {
-          if (!uniqueParts.includes(part)) {
-            uniqueParts.push(part);
+        // Check if we have structured name data
+        if (student.profile.name && student.profile.name.givenName) {
+          firstName = student.profile.name.givenName;
+          lastName = student.profile.name.familyName || "";
+        } 
+        // Otherwise parse from the full name
+        else {
+          // Remove prefixes first
+          const cleanedName = studentName.replace(/fullName|givenName|familyName/g, '');
+          
+          // Split by spaces and remove duplicates
+          const nameParts = cleanedName.split(/\s+/).filter(part => part.trim().length > 0);
+          const uniqueParts = [...new Set(nameParts)];
+          
+          if (uniqueParts.length >= 2) {
+            firstName = uniqueParts[0];
+            lastName = uniqueParts[uniqueParts.length - 1];
+          } else if (uniqueParts.length === 1) {
+            firstName = uniqueParts[0];
+            lastName = "";
           }
         }
-        cleanStudentName = uniqueParts.join(' ');
+        
+        // Construct a consistent name format: "FirstName LastName"
+        let cleanStudentName = firstName;
+        if (lastName) {
+          cleanStudentName += " " + lastName;
+        }
+        
+        // Clean up any remaining special characters
+        cleanStudentName = cleanStudentName
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
         
         // If name is empty, use a fallback
         if (!cleanStudentName) {
           cleanStudentName = "Student-" + studentId;
         }
         
-        // Log the cleaned name
+        // Log the final cleaned name
         Logger.log("Cleaned student name: " + cleanStudentName);
         
         // Use existing student folder or create a new one for this topic
