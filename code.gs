@@ -268,6 +268,9 @@ function downloadAssignments(courseId, topicIds) {
       topicFolders['no-topic'] = rootFolder.createFolder('Uncategorized');
     }
     
+    // Create a map to track student folders by topic
+    const studentFoldersByTopic = {};
+    
     // Process each assignment
     let downloadCount = 0;
     
@@ -285,6 +288,12 @@ function downloadAssignments(courseId, topicIds) {
       }
       
       const topicFolder = topicFolders[topicId] || topicFolders['no-topic'];
+      
+      // Initialize student folders map for this topic if needed
+      if (!studentFoldersByTopic[topicId]) {
+        studentFoldersByTopic[topicId] = {};
+      }
+      
       const submissions = getAllSubmissions(courseId, assignment.id);
       
       // Process each submission
@@ -301,10 +310,22 @@ function downloadAssignments(courseId, topicIds) {
           continue;
         }
         
-        // Create student folder - ensure studentName is a string
+        // Get clean student name
         const studentName = student.profile.name || student.profile.emailAddress || studentId.toString();
-        const safeStudentName = String(studentName).replace(/[^\w\s-]/g, '');
-        const studentFolder = topicFolder.createFolder(safeStudentName);
+        // Remove fullName, givenName, familyName prefixes and other non-alphanumeric characters
+        const cleanStudentName = String(studentName)
+          .replace(/fullName|givenName|familyName/g, '')
+          .replace(/[^\w\s-]/g, '')
+          .trim();
+        
+        // Use existing student folder or create a new one for this topic
+        let studentFolder;
+        if (!studentFoldersByTopic[topicId][studentId]) {
+          studentFolder = topicFolder.createFolder(cleanStudentName);
+          studentFoldersByTopic[topicId][studentId] = studentFolder;
+        } else {
+          studentFolder = studentFoldersByTopic[topicId][studentId];
+        }
         
         // Process attachments
         const attachments = submission.assignmentSubmission.attachments;
@@ -315,7 +336,10 @@ function downloadAssignments(courseId, topicIds) {
           }
           
           const attachment = attachments[i];
-          const baseFilename = assignment.title + '_' + safeStudentName.replace(/\s+/g, '-');
+          const safeAssignmentTitle = String(assignment.title)
+            .replace(/[^\w\s-]/g, '')
+            .replace(/\s+/g, '-');
+          const baseFilename = safeAssignmentTitle;
           
           if (attachment.driveFile) {
             downloadFile(attachment.driveFile, studentFolder, baseFilename);
