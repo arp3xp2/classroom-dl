@@ -389,6 +389,13 @@ function doGet() {
           document.getElementById('cancelBtn').style.display = 'none';
           document.getElementById('progress').style.display = 'none';
         }
+
+        // In der script-Sektion, nach dem Laden der Seite
+        google.script.run
+          .withSuccessHandler(function(result) {
+            console.log("Logged in as: " + (result.user || "unknown"));
+          })
+          .logAccess();
       </script>
     </body>
     </html>
@@ -734,5 +741,19 @@ function createDownloadFolder(courseId) {
   } catch (error) {
     Logger.log("Error creating folder: " + error);
     throw new Error("Failed to create download folder: " + error.message);
+  }
+}
+
+/**
+ * Logs user access to the app
+ */
+function logAccess() {
+  try {
+    const user = Session.getActiveUser().getEmail();
+    Logger.log("App accessed by: " + user);
+    return { success: true, user: user };
+  } catch (error) {
+    Logger.log("Error logging access: " + error);
+    return { success: false, error: error.toString() };
   }
 }
