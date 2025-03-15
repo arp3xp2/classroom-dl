@@ -312,9 +312,14 @@ function downloadAssignments(courseId, topicIds) {
         
         // Get clean student name
         const studentName = student.profile.name || student.profile.emailAddress || studentId.toString();
-        // Remove fullName, givenName, familyName prefixes and other non-alphanumeric characters
+        
+        // Better regex to clean up student names with prefixes and duplicates
         const cleanStudentName = String(studentName)
+          // First remove the prefixes
           .replace(/fullName|givenName|familyName/g, '')
+          // Then extract just the actual name by finding word sequences
+          .match(/([A-Za-z]+\s*[A-Za-z]+)/g)?.[0] || studentName
+          // Remove any remaining special characters
           .replace(/[^\w\s-]/g, '')
           .trim();
         
@@ -339,7 +344,10 @@ function downloadAssignments(courseId, topicIds) {
           const safeAssignmentTitle = String(assignment.title)
             .replace(/[^\w\s-]/g, '')
             .replace(/\s+/g, '-');
-          const baseFilename = safeAssignmentTitle;
+          
+          // Include student name in filename
+          const safeStudentNameForFile = cleanStudentName.replace(/\s+/g, '-');
+          const baseFilename = `${safeAssignmentTitle}_${safeStudentNameForFile}`;
           
           if (attachment.driveFile) {
             downloadFile(attachment.driveFile, studentFolder, baseFilename);
