@@ -10,7 +10,8 @@ A simple Google Apps Script tool that downloads student assignments from Google 
 
 ## Screenshots
 
-[Add screenshots of your UI here]
+![Google Classroom Assignment Downloader interface showing course selection dropdown and topic list](screenshots/main.png)
+![Download progress screen with progress bar and folder link](screenshots/download.png)
 
 ## Installation
 
