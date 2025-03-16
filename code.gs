@@ -220,7 +220,7 @@ function doGet() {
       </style>
     </head>
     <body>
-      <h2>Google Classroom Assignment Downloader</h2>
+    <h2>Google Classroom Assignment Downloader</h2>
       
       <div class="card">
         <h3>Step 1: Select Course</h3>
@@ -233,7 +233,7 @@ function doGet() {
         <h3>Step 2: Select Topics</h3>
         <div id="topicsList">
           <div class="loading-spinner"></div>
-        </div>
+          </div>
         <div id="selectAllContainer" style="display:none;">
           <input type="checkbox" id="selectAll" onclick="toggleAllTopics()">
           <label for="selectAll">Select All Topics</label>
@@ -254,8 +254,8 @@ function doGet() {
       <div id="progress" style="display:none;" class="progress-container">
         <div id="progressBar" class="progress-bar"></div>
       </div>
-
-      <script>
+    
+    <script>
         let downloadInProgress = false;
         let folderUrl = '';
         
@@ -396,7 +396,7 @@ function doGet() {
             console.log("Logged in as: " + (result.user || "unknown"));
           })
           .logAccess();
-      </script>
+    </script>
     </body>
     </html>
   `);
