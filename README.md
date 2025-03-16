@@ -7,6 +7,9 @@ A simple Google Apps Script tool that downloads student assignments from Google 
 - **Topic-based organization**: Download assignments from specific topics or all topics
 - **Student folders**: Creates one folder per student within each topic
 - **Consistent naming**: Files are renamed to `assignment-title_student-name.extension`
+- **PDF conversion**: Option to automatically convert compatible files (Google Docs, Sheets, Slides, and Microsoft Office files) to PDF format
+
+Note: PDF conversion only works for Google Workspace files and Microsoft Office formats. Other file types (images, audio, etc.) will remain in their original format.
 
 ## Screenshots
 
@@ -57,9 +60,10 @@ These are automatically enabled when you add the services in the Apps Script edi
 1. Open the web app URL
 2. Select a course from the dropdown
 3. Choose which topics to download (or select all)
-4. Click "Download Selected Assignments"
-5. A Google Drive folder will be created with the downloaded files
-6. Click the provided link to open the folder
+4. Optional: Check "Convert compatible files to PDF" to convert documents to PDF format
+5. Click "Download Selected Assignments"
+6. A Google Drive folder will be created with the downloaded files
+7. Click the provided link to open the folder
 
 ## Folder Structure
 

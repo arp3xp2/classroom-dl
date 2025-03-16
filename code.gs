@@ -217,6 +217,19 @@ function doGet() {
           padding: 24px;
           margin-bottom: 24px;
         }
+        
+        .option-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px;
+          cursor: pointer;
+        }
+        
+        .option-item:hover {
+          background-color: #f1f3f4;
+          border-radius: 4px;
+        }
       </style>
     </head>
     <body>
@@ -238,6 +251,14 @@ function doGet() {
           <input type="checkbox" id="selectAll" onclick="toggleAllTopics()">
           <label for="selectAll">Select All Topics</label>
         </div>
+      </div>
+      
+      <div class="card">
+        <h3>Options</h3>
+        <label class="option-item">
+          <input type="checkbox" id="convertToPdf">
+          Convert compatible files to PDF
+        </label>
       </div>
       
       <div class="button-container">
@@ -322,6 +343,7 @@ function doGet() {
           const courseId = document.getElementById('courseSelect').value;
           const topicCheckboxes = document.querySelectorAll('input[name="topic"]:checked');
           const topicIds = Array.from(topicCheckboxes).map(cb => cb.value);
+          const convertToPdf = document.getElementById('convertToPdf').checked;
 
           document.getElementById('status').innerHTML = '<div class="loading-spinner inline-spinner"></div> Preparing download...';
           document.getElementById('downloadBtn').disabled = true;
@@ -345,7 +367,7 @@ function doGet() {
               google.script.run
                 .withSuccessHandler(showSuccess)
                 .withFailureHandler(showError)
-                .downloadAssignments(courseId, topicIds, folderInfo.id);
+                .downloadAssignments(courseId, topicIds, folderInfo.id, convertToPdf);
             })
             .withFailureHandler(showError)
             .createDownloadFolder(courseId);
@@ -474,7 +496,7 @@ function cancelDownload() {
 /**
  * Main function to download assignments
  */
-function downloadAssignments(courseId, topicIds, rootFolderId) {
+function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
   try {
     // Reset cancel flag
     shouldCancelDownload = false;
@@ -642,7 +664,7 @@ function downloadAssignments(courseId, topicIds, rootFolderId) {
           const baseFilename = `${safeAssignmentTitle}_${safeStudentNameForFile}`;
           
           if (attachment.driveFile) {
-            downloadFile(attachment.driveFile, studentFolder, baseFilename);
+            downloadFile(attachment.driveFile, studentFolder, baseFilename, convertToPdf);
             downloadCount++;
           } else if (attachment.link) {
             createLinkFile(attachment.link, studentFolder, baseFilename);
@@ -703,14 +725,60 @@ function getAllSubmissions(courseId, courseWorkId) {
   return submissions;
 }
 
-function downloadFile(driveFile, folder, baseFilename) {
+function downloadFile(driveFile, folder, baseFilename, convertToPdf) {
   try {
     const file = DriveApp.getFileById(driveFile.id);
     const fileName = file.getName();
-    const ext = fileName.split('.').pop();
-    const newFilename = baseFilename + '.' + ext;
+    const mimeType = file.getMimeType();
+    const originalExt = fileName.split('.').pop().toLowerCase();
     
-    file.makeCopy(newFilename, folder);
+    // Define convertible MIME types
+    const convertibleMimeTypes = {
+      'application/vnd.google-apps.document': 'application/pdf',
+      'application/vnd.google-apps.spreadsheet': 'application/pdf',
+      'application/vnd.google-apps.presentation': 'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'application/pdf',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'application/pdf',
+      'application/msword': 'application/pdf',
+      'application/vnd.ms-excel': 'application/pdf',
+      'application/vnd.ms-powerpoint': 'application/pdf'
+    };
+    
+    const shouldConvert = convertToPdf && convertibleMimeTypes.hasOwnProperty(mimeType);
+    
+    if (shouldConvert) {
+      Logger.log(`Converting file ${fileName} (${mimeType}) to PDF`);
+      try {
+        // For Google Workspace files
+        if (mimeType.includes('google-apps')) {
+          const pdfBlob = file.getAs('application/pdf');
+          const newFilename = baseFilename + '.pdf';
+          folder.createFile(pdfBlob).setName(newFilename);
+          Logger.log(`Successfully converted Google file to PDF: ${newFilename}`);
+        } 
+        // For Microsoft Office files
+        else {
+          const newFilename = baseFilename + '.pdf';
+          const pdfFile = Drive.Files.copy(
+            {title: newFilename, mimeType: 'application/pdf'},
+            driveFile.id,
+            {convert: true}
+          );
+          DriveApp.getFileById(pdfFile.id).moveTo(folder);
+          Logger.log(`Successfully converted Office file to PDF: ${newFilename}`);
+        }
+      } catch (convError) {
+        Logger.log(`Error converting to PDF: ${convError}. Falling back to original format.`);
+        const newFilename = baseFilename + '.' + originalExt;
+        file.makeCopy(newFilename, folder);
+      }
+    } else {
+      // Keep original format
+      const newFilename = baseFilename + '.' + originalExt;
+      file.makeCopy(newFilename, folder);
+      Logger.log(`Copied file in original format: ${newFilename}`);
+    }
   } catch (error) {
     Logger.log('Error downloading file: ' + error);
   }
