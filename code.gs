@@ -829,7 +829,7 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
         
         // Clean up any remaining special characters
         cleanStudentName = cleanStudentName
-          .replace(/[^\w\s-]/g, '')
+          .replace(/[^\p{L}\p{N}\s-]/gu, '')
           .replace(/\s+/g, ' ')
           .trim();
         
@@ -860,7 +860,7 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
           
           const attachment = attachments[i];
           const safeAssignmentTitle = String(assignment.title)
-            .replace(/[^\w\s-]/g, '')
+            .replace(/[^\p{L}\p{N}\s-]/gu, '')
             .replace(/\s+/g, '-');
           
           // Include student name in filename
