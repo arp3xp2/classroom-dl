@@ -830,7 +830,7 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
         // Clean up any remaining special characters
         cleanStudentName = cleanStudentName
           .normalize('NFC')
-          .replace(/[^\p{L}\p{N}\s-]/gu, '')
+          .replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '')
           .replace(/\s+/g, ' ')
           .trim();
         
@@ -862,13 +862,11 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
           const attachment = attachments[i];
           const safeAssignmentTitle = String(assignment.title)
             .normalize('NFC')
-            .replace(/[^\p{L}\p{N}\s-]/gu, '')
+            .replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '')
             .replace(/\s+/g, '-');
           
           // Include student name in filename
-          const safeStudentNameForFile = cleanStudentName
-            .normalize('NFC')
-            .replace(/\s+/g, '-');
+          const safeStudentNameForFile = cleanStudentName.replace(/\s+/g, '-');
           const baseFilename = `${safeAssignmentTitle}_${safeStudentNameForFile}`;
           
           if (attachment.driveFile) {
@@ -1310,7 +1308,7 @@ function formatDueDate(dueDate) {
 function sanitizeFilename(name) {
   return String(name)
     .normalize('NFC')
-    .replace(/[<>:"/\\|?*]/g, '')   // tylko znaki niedozwolone w systemach plików
+    .replace(/[<>:"/\\|?*]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .substring(0, 100);
