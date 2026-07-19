@@ -147,6 +147,18 @@ function doGet() {
           color: #5f6368;
           min-height: 24px;
         }
+
+        .skipped-files {
+          margin-top: 12px;
+          padding: 12px;
+          background: #fff3cd;
+          border-radius: 4px;
+        }
+
+        .skipped-files ul {
+          margin: 8px 0 0 0;
+          padding-left: 20px;
+        }
         
         #folderLink {
           margin-top: 12px;
@@ -310,7 +322,7 @@ function doGet() {
         <h3>Options</h3>
         <label class="option-item">
           <input type="checkbox" id="convertToPdf">
-          Convert compatible files to PDF
+          Convert Google Docs, Sheets, and Slides to PDF
         </label>
       </div>
       
@@ -352,7 +364,7 @@ function doGet() {
         <h3>Options</h3>
         <label class="option-item">
           <input type="checkbox" id="reportConvertToPdf">
-          Convert compatible files to PDF
+          Convert Google Docs, Sheets, and Slides to PDF
         </label>
         <label class="option-item">
           <input type="checkbox" id="skipLargeFiles" checked>
@@ -394,20 +406,34 @@ function doGet() {
           .withFailureHandler(showError)
           .listCourses();
 
-        function showCourses(courses) {
-          // Populate downloader course select
-          const select = document.getElementById('courseSelect');
-          select.innerHTML = '<option value="">Select a course...</option>';
-          courses.forEach(course => {
-            select.innerHTML += \`<option value="\${course.id}">\${course.name}</option>\`;
-          });
+        function appendSelectOption(select, value, label) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          select.appendChild(option);
+        }
 
-          // Populate report course select
-          const reportSelect = document.getElementById('reportCourseSelect');
-          reportSelect.innerHTML = '<option value="">Select a course...</option>';
+        function populateCourseSelect(select, courses) {
+          select.replaceChildren();
+          appendSelectOption(select, '', 'Select a course...');
           courses.forEach(course => {
-            reportSelect.innerHTML += \`<option value="\${course.id}">\${course.name}</option>\`;
+            appendSelectOption(select, course.id, course.name);
           });
+        }
+
+        function showDriveFolderLink(container, url, label) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = label;
+          container.replaceChildren(link);
+          container.style.display = 'block';
+        }
+
+        function showCourses(courses) {
+          populateCourseSelect(document.getElementById('courseSelect'), courses);
+          populateCourseSelect(document.getElementById('reportCourseSelect'), courses);
         }
 
         function loadTopics() {
@@ -427,22 +453,33 @@ function doGet() {
 
         function showTopics(topics) {
           const div = document.getElementById('topicsList');
+          div.replaceChildren();
+
           if (topics.length === 0) {
-            div.innerHTML = '<p>No topics found in this course. All assignments will be downloaded.</p>';
+            const message = document.createElement('p');
+            message.textContent = 'No topics found in this course. All assignments will be downloaded.';
+            div.appendChild(message);
             document.getElementById('downloadBtn').disabled = false;
             document.getElementById('selectAllContainer').style.display = 'none';
             document.getElementById('status').innerHTML = '';
             return;
           }
 
-          div.innerHTML = topics.map(topic => \`
-            <div class="topic-item">
-              <label>
-                <input type="checkbox" name="topic" value="\${topic.id}">
-                \${topic.name}
-              </label>
-            </div>
-          \`).join('');
+          topics.forEach(topic => {
+            const item = document.createElement('div');
+            item.className = 'topic-item';
+
+            const label = document.createElement('label');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = 'topic';
+            checkbox.value = topic.id;
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(' ' + topic.name));
+            item.appendChild(label);
+            div.appendChild(item);
+          });
 
           document.getElementById('downloadBtn').disabled = false;
           document.getElementById('status').innerHTML = '';
@@ -473,9 +510,11 @@ function doGet() {
           google.script.run
             .withSuccessHandler(function(folderInfo) {
               folderUrl = folderInfo.url;
-              document.getElementById('folderLink').innerHTML = 
-                \`<a href="\${folderUrl}" target="_blank">Open folder in Google Drive</a>\`;
-              document.getElementById('folderLink').style.display = 'block';
+              showDriveFolderLink(
+                document.getElementById('folderLink'),
+                folderUrl,
+                'Open folder in Google Drive'
+              );
               document.getElementById('status').innerHTML = '<div class="loading-spinner inline-spinner"></div> Downloading assignments...';
               document.getElementById('progressBar').style.width = '30%';
               
@@ -508,7 +547,7 @@ function doGet() {
 
         function showSuccess(message) {
           downloadInProgress = false;
-          document.getElementById('status').innerHTML = message;
+          document.getElementById('status').textContent = message;
           document.getElementById('downloadBtn').disabled = false;
           document.getElementById('cancelBtn').style.display = 'none';
           document.getElementById('progressBar').style.width = '100%';
@@ -522,7 +561,7 @@ function doGet() {
 
         function showError(error) {
           downloadInProgress = false;
-          document.getElementById('status').innerHTML = 'Error: ' + error;
+          document.getElementById('status').textContent = 'Error: ' + error;
           document.getElementById('downloadBtn').disabled = false;
           document.getElementById('cancelBtn').style.display = 'none';
           document.getElementById('progress').style.display = 'none';
@@ -558,9 +597,13 @@ function doGet() {
 
         function showStudents(students) {
           const select = document.getElementById('studentSelect');
-          select.innerHTML = '<option value="">Select a student...</option>';
+          select.replaceChildren();
+          appendSelectOption(select, '', 'Select a student...');
           students.forEach(student => {
-            select.innerHTML += \`<option value="\${student.id}">\${student.name} (\${student.email})</option>\`;
+            const emailSuffix = student.email && student.email !== student.name
+              ? \` (\${student.email})\`
+              : '';
+            appendSelectOption(select, student.id, student.name + emailSuffix);
           });
           document.getElementById('reportStatus').innerHTML = '';
           document.getElementById('exportBtn').disabled = false;
@@ -589,26 +632,37 @@ function doGet() {
         }
 
         function showReportSuccess(result) {
-          let statusHtml = result.message;
+          const reportStatus = document.getElementById('reportStatus');
+          reportStatus.replaceChildren(document.createTextNode(result.message));
 
           // Show skipped files if any
           if (result.skippedFiles && result.skippedFiles.length > 0) {
-            statusHtml += '<div style="margin-top: 12px; padding: 12px; background: #fff3cd; border-radius: 4px;">';
-            statusHtml += '<strong>Skipped large files:</strong><ul style="margin: 8px 0 0 0; padding-left: 20px;">';
+            const skippedFiles = document.createElement('div');
+            skippedFiles.className = 'skipped-files';
+
+            const heading = document.createElement('strong');
+            heading.textContent = 'Skipped large files:';
+            skippedFiles.appendChild(heading);
+
+            const list = document.createElement('ul');
             result.skippedFiles.forEach(f => {
-              statusHtml += \`<li>\${f.fileName} (\${f.sizeMB} MB) - \${f.assignment}</li>\`;
+              const item = document.createElement('li');
+              item.textContent = \`\${f.fileName} (\${f.sizeMB} MB) - \${f.assignment}\`;
+              list.appendChild(item);
             });
-            statusHtml += '</ul></div>';
+            skippedFiles.appendChild(list);
+            reportStatus.appendChild(skippedFiles);
           }
 
-          document.getElementById('reportStatus').innerHTML = statusHtml;
           document.getElementById('reportProgressBar').style.width = '100%';
           document.getElementById('exportBtn').disabled = false;
 
           if (result.folderUrl) {
-            document.getElementById('reportFolderLink').innerHTML =
-              \`<a href="\${result.folderUrl}" target="_blank">Open report folder in Google Drive</a>\`;
-            document.getElementById('reportFolderLink').style.display = 'block';
+            showDriveFolderLink(
+              document.getElementById('reportFolderLink'),
+              result.folderUrl,
+              'Open report folder in Google Drive'
+            );
           }
 
           setTimeout(() => {
@@ -618,7 +672,7 @@ function doGet() {
         }
 
         function showReportError(error) {
-          document.getElementById('reportStatus').innerHTML = 'Error: ' + error;
+          document.getElementById('reportStatus').textContent = 'Error: ' + error;
           document.getElementById('exportBtn').disabled = false;
           document.getElementById('reportProgress').style.display = 'none';
         }
@@ -688,6 +742,15 @@ function getTopics(courseId) {
 
 // Add this at the top of your script
 let shouldCancelDownload = false;
+// Extensions are sanitized and appended after the generated stem budget.
+const MAX_GENERATED_STEM_GRAPHEMES = 100;
+const MAX_GENERATED_EXTENSION_GRAPHEMES = 32;
+const PDF_CONVERTIBLE_MIME_TYPES = new Set([
+  'application/vnd.google-apps.document',
+  'application/vnd.google-apps.spreadsheet',
+  'application/vnd.google-apps.presentation'
+]);
+let graphemeSegmenter = null;
 
 /**
  * Cancels the current download
@@ -715,6 +778,7 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
     // Get students and course work
     const students = getAllStudents(courseId);
     const courseWork = getAllCourseWork(courseId);
+    validateCourseWork(courseWork);
     
     // Create topic folders
     const topicFolders = {};
@@ -730,7 +794,8 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
       // Create folders for selected topics
       topicIds.forEach(id => {
         const name = topicMap.get(id) || `Topic ${id}`;
-        topicFolders[id] = rootFolder.createFolder(name);
+        const folderName = buildFolderName(name, `Topic ${id}`);
+        topicFolders[id] = rootFolder.createFolder(folderName);
       });
       
       // Only add uncategorized folder if we have assignments without topics
@@ -746,6 +811,7 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
     
     // Create a map to track student folders by topic
     const studentFoldersByTopic = {};
+    const studentNamesById = new Map();
     
     // Process each assignment
     let downloadCount = 0;
@@ -771,6 +837,11 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
       }
       
       const submissions = getAllSubmissions(courseId, assignment.id);
+      const safeAssignmentTitle = buildFileStem(
+        assignment.title,
+        `Assignment-${assignment.id}`
+      );
+      const safeAssignmentId = buildFileStem(assignment.id);
       
       // Process each submission
       for (const submission of submissions) {
@@ -786,61 +857,11 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
           continue;
         }
         
-        // Get clean student name - ensure it's a string
-        const rawStudentName = student.profile.name || student.profile.emailAddress || studentId.toString();
-        const studentName = String(rawStudentName); // Force conversion to string
-        
-        // Log the raw student name and profile structure for debugging
-        Logger.log("Raw student name: " + studentName);
-        Logger.log("Student profile structure: " + JSON.stringify(student.profile));
-        
-        // Try to extract first and last name consistently
-        let firstName = "";
-        let lastName = "";
-        
-        // Check if we have structured name data
-        if (student.profile.name && student.profile.name.givenName) {
-          firstName = student.profile.name.givenName;
-          lastName = student.profile.name.familyName || "";
-        } 
-        // Otherwise parse from the full name
-        else {
-          // Remove prefixes first
-          const cleanedName = studentName.replace(/fullName|givenName|familyName/g, '');
-          
-          // Split by spaces and remove duplicates
-          const nameParts = cleanedName.split(/\s+/).filter(part => part.trim().length > 0);
-          const uniqueParts = [...new Set(nameParts)];
-          
-          if (uniqueParts.length >= 2) {
-            firstName = uniqueParts[0];
-            lastName = uniqueParts[uniqueParts.length - 1];
-          } else if (uniqueParts.length === 1) {
-            firstName = uniqueParts[0];
-            lastName = "";
-          }
+        if (!studentNamesById.has(studentId)) {
+          studentNamesById.set(studentId, getDownloadStudentNames(student, studentId));
         }
-        
-        // Construct a consistent name format: "FirstName LastName"
-        let cleanStudentName = firstName;
-        if (lastName) {
-          cleanStudentName += " " + lastName;
-        }
-        
-        // Clean up any remaining special characters
-        cleanStudentName = cleanStudentName
-          .normalize('NFC')
-          .replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        // If name is empty, use a fallback
-        if (!cleanStudentName) {
-          cleanStudentName = "Student-" + studentId;
-        }
-        
-        // Log the final cleaned name
-        Logger.log("Cleaned student name: " + cleanStudentName);
+        const { folderName: cleanStudentName, filenamePart: safeStudentNameForFile } =
+          studentNamesById.get(studentId);
         
         // Use existing student folder or create a new one for this topic
         let studentFolder;
@@ -860,14 +881,14 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
           }
           
           const attachment = attachments[i];
-          const safeAssignmentTitle = String(assignment.title)
-            .normalize('NFC')
-            .replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '')
-            .replace(/\s+/g, '-');
-          
-          // Include student name in filename
-          const safeStudentNameForFile = cleanStudentName.replace(/\s+/g, '-');
-          const baseFilename = `${safeAssignmentTitle}_${safeStudentNameForFile}`;
+          const baseFilename = buildAssignmentAttachmentFilename(
+            safeAssignmentTitle,
+            safeStudentNameForFile,
+            safeAssignmentId,
+            i,
+            attachments.length,
+            attachment.link ? 'link' : ''
+          );
           
           if (attachment.driveFile) {
             downloadFile(attachment.driveFile, studentFolder, baseFilename, convertToPdf);
@@ -890,6 +911,47 @@ function downloadAssignments(courseId, topicIds, rootFolderId, convertToPdf) {
 /**
  * Helper functions
  */
+function getStudentProfileName(student) {
+  const profile = student.profile || {};
+  const name = profile.name || {};
+
+  if (typeof name === 'string') return name.trim();
+
+  const fullName = String(name.fullName || '').trim();
+  if (fullName) return fullName;
+
+  const givenName = String(name.givenName || '').trim();
+  const familyName = String(name.familyName || '').trim();
+  if (givenName) {
+    return givenName + (familyName ? ' ' + familyName : '');
+  }
+  return '';
+}
+
+function getStudentDisplayName(student) {
+  const profile = student.profile || {};
+  return getStudentProfileName(student) ||
+    profile.emailAddress ||
+    `Unknown-${student.userId}`;
+}
+
+function getDownloadStudentNames(student, studentId) {
+  const profile = student.profile || {};
+  const profileName = getStudentProfileName(student);
+
+  Logger.log("Raw student name: " + (profileName || '[missing]'));
+  Logger.log("Student profile structure: " + JSON.stringify(profile));
+
+  const fallback = `Student-${studentId}`;
+  const folderName = buildFolderName(profileName, fallback);
+  Logger.log("Cleaned student name: " + folderName);
+
+  return {
+    folderName: folderName,
+    filenamePart: buildFileStem(profileName, fallback)
+  };
+}
+
 function getAllStudents(courseId) {
   const students = [];
   let pageToken = null;
@@ -916,6 +978,12 @@ function getAllCourseWork(courseId) {
   return courseWork;
 }
 
+function validateCourseWork(courseWork) {
+  if (courseWork.some(assignment => !assignment.id)) {
+    throw new Error("Coursework contains an assignment without an ID");
+  }
+}
+
 function getAllSubmissions(courseId, courseWorkId) {
   const submissions = [];
   let pageToken = null;
@@ -934,65 +1002,30 @@ function getAllSubmissions(courseId, courseWorkId) {
 function downloadFile(driveFile, folder, baseFilename, convertToPdf) {
   try {
     const file = DriveApp.getFileById(driveFile.id);
-    const fileName = file.getName();
-    const mimeType = file.getMimeType();
-    const originalExt = fileName.split('.').pop().toLowerCase();
-    
-    // Define convertible MIME types
-    const convertibleMimeTypes = {
-      'application/vnd.google-apps.document': 'application/pdf',
-      'application/vnd.google-apps.spreadsheet': 'application/pdf',
-      'application/vnd.google-apps.presentation': 'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/pdf',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'application/pdf',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'application/pdf',
-      'application/msword': 'application/pdf',
-      'application/vnd.ms-excel': 'application/pdf',
-      'application/vnd.ms-powerpoint': 'application/pdf'
-    };
-    
-    const shouldConvert = convertToPdf && convertibleMimeTypes.hasOwnProperty(mimeType);
-    
-    if (shouldConvert) {
-      Logger.log(`Converting file ${fileName} (${mimeType}) to PDF`);
-      try {
-        // For Google Workspace files
-        if (mimeType.includes('google-apps')) {
-          const pdfBlob = file.getAs('application/pdf');
-          const newFilename = baseFilename + '.pdf';
-          folder.createFile(pdfBlob).setName(newFilename);
-          Logger.log(`Successfully converted Google file to PDF: ${newFilename}`);
-        } 
-        // For Microsoft Office files
-        else {
-          const newFilename = baseFilename + '.pdf';
-          const pdfFile = Drive.Files.copy(
-            {title: newFilename, mimeType: 'application/pdf'},
-            driveFile.id,
-            {convert: true}
-          );
-          DriveApp.getFileById(pdfFile.id).moveTo(folder);
-          Logger.log(`Successfully converted Office file to PDF: ${newFilename}`);
-        }
-      } catch (convError) {
-        Logger.log(`Error converting to PDF: ${convError}. Falling back to original format.`);
-        const newFilename = baseFilename + '.' + originalExt;
-        file.makeCopy(newFilename, folder);
-      }
-    } else {
-      // Keep original format
-      const newFilename = baseFilename + '.' + originalExt;
-      file.makeCopy(newFilename, folder);
-      Logger.log(`Copied file in original format: ${newFilename}`);
-    }
+    const fileMetadata = getDriveFileMetadata(file);
+    const newFilename = copyFileWithOptions(
+      file,
+      folder,
+      baseFilename,
+      convertToPdf,
+      fileMetadata
+    );
+    Logger.log(`Copied file as: ${newFilename}`);
   } catch (error) {
     Logger.log('Error downloading file: ' + error);
   }
 }
 
+function getDriveFileMetadata(file) {
+  return {
+    name: file.getName(),
+    mimeType: file.getMimeType()
+  };
+}
+
 function createLinkFile(link, folder, baseFilename) {
   const content = 'URL: ' + link.url;
-  const newFilename = baseFilename + '_link.txt';
+  const newFilename = appendFileExtension(baseFilename, 'txt');
   folder.createFile(newFilename, content);
 }
 
@@ -1006,7 +1039,11 @@ function createDownloadFolder(courseId) {
     const courseName = courseDetails.name;
     
     // Create main folder
-    const rootFolder = DriveApp.createFolder('Classroom Downloads - ' + courseName);
+    const folderName = buildFolderName(
+      `Classroom Downloads - ${courseName}`,
+      'Classroom Downloads'
+    );
+    const rootFolder = DriveApp.createFolder(folderName);
     
     return {
       id: rootFolder.getId(),
@@ -1042,13 +1079,11 @@ function getStudentsForReport(courseId) {
     const students = getAllStudents(courseId);
     return students.map(s => {
       const profile = s.profile || {};
-      const name = profile.name || {};
-      const fullName = name.fullName || name.givenName || 'Unknown';
       const email = profile.emailAddress || '';
 
       return {
         id: s.userId,
-        name: fullName,
+        name: getStudentDisplayName(s),
         email: email
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
@@ -1056,6 +1091,17 @@ function getStudentsForReport(courseId) {
     Logger.log("Error getting students: " + error);
     throw new Error("Failed to load students: " + error.message);
   }
+}
+
+function createDriveAttachmentRecord(driveFile, originalName, outputName, details = {}) {
+  return {
+    ...details,
+    type: 'driveFile',
+    name: originalName,
+    originalName: originalName,
+    outputName: outputName,
+    id: driveFile.id
+  };
 }
 
 /**
@@ -1076,14 +1122,19 @@ function generateStudentReport(courseId, studentId, skipLargeFiles = true, conve
       throw new Error("Student not found");
     }
 
-    const studentName = getCleanStudentName(student);
-
-    // Create report folder
-    const folderName = `${studentName} - ${course.name} - Report`;
-    const rootFolder = DriveApp.createFolder(folderName);
+    const studentName = getStudentDisplayName(student);
+    const reportFolderStudentName = getStudentProfileName(student) || `Student-${studentId}`;
 
     // Get all coursework
     const courseWork = getAllCourseWork(courseId);
+    validateCourseWork(courseWork);
+
+    // Create report folder
+    const folderName = buildFolderName(
+      `${reportFolderStudentName} - ${course.name} - Report`,
+      `Student-${studentId}-Report`
+    );
+    const rootFolder = DriveApp.createFolder(folderName);
 
     // Get topics for organization
     const topics = getTopics(courseId);
@@ -1122,7 +1173,8 @@ function generateStudentReport(courseId, studentId, skipLargeFiles = true, conve
 
       // Create topic folder if needed
       if (!topicFolders[topicId]) {
-        topicFolders[topicId] = rootFolder.createFolder(topicName);
+        const topicFolderName = buildFolderName(topicName, `Topic-${topicId}`);
+        topicFolders[topicId] = rootFolder.createFolder(topicFolderName);
       }
 
       // Get this student's submission
@@ -1169,55 +1221,87 @@ function generateStudentReport(courseId, studentId, skipLargeFiles = true, conve
 
         // Download attachments
         if (studentSubmission.assignmentSubmission?.attachments) {
-          const assignmentFolder = topicFolders[topicId].createFolder(
-            sanitizeFilename(assignment.title)
+          const attachments = studentSubmission.assignmentSubmission.attachments;
+          const safeAssignmentTitle = buildFolderName(
+            assignment.title,
+            `Assignment-${assignment.id}`
           );
+          const safeAssignmentId = buildFileStem(assignment.id);
+          const assignmentFolderName = joinFilenameParts(
+            safeAssignmentTitle,
+            safeAssignmentId
+          );
+          const assignmentFolder = topicFolders[topicId].createFolder(assignmentFolderName);
+          const driveFileCount = attachments.filter(attachment => attachment.driveFile).length;
+          let driveFileIndex = 0;
 
-          for (const attachment of studentSubmission.assignmentSubmission.attachments) {
+          for (const attachment of attachments) {
             if (attachment.driveFile) {
+              const attachmentIndex = driveFileIndex++;
+              let originalName = attachment.driveFile.title || 'unknown';
+
               try {
                 const file = DriveApp.getFileById(attachment.driveFile.id);
-                const fileName = file.getName();
+                const fileMetadata = getDriveFileMetadata(file);
+                originalName = fileMetadata.name;
                 const fileSize = file.getSize();
                 const fileSizeMB = Math.round(fileSize / (1024 * 1024) * 10) / 10;
+                const sourceStem = getFilenameStem(originalName, fileMetadata.mimeType);
+                const safeSourceStem = buildFileStem(
+                  sourceStem,
+                  `Attachment-${attachment.driveFile.id}`
+                );
+                const outputBaseFilename = addAttachmentIndex(
+                  safeSourceStem,
+                  attachmentIndex,
+                  driveFileCount
+                );
 
                 // Check if file is too large
                 if (skipLargeFiles && fileSize > MAX_FILE_SIZE) {
                   const skippedInfo = {
                     assignment: assignment.title,
-                    fileName: fileName,
+                    fileName: originalName,
                     sizeMB: fileSizeMB,
                     id: attachment.driveFile.id
                   };
                   skippedFiles.push(skippedInfo);
 
-                  submissionData.attachments.push({
-                    type: 'driveFile',
-                    name: fileName,
-                    id: attachment.driveFile.id,
-                    sizeMB: fileSizeMB,
-                    skipped: true,
-                    reason: 'File too large (>' + (MAX_FILE_SIZE / 1024 / 1024) + ' MB)'
-                  });
+                  submissionData.attachments.push(createDriveAttachmentRecord(
+                    attachment.driveFile,
+                    originalName,
+                    null,
+                    {
+                      sizeMB: fileSizeMB,
+                      skipped: true,
+                      reason: 'File too large (>' + (MAX_FILE_SIZE / 1024 / 1024) + ' MB)'
+                    }
+                  ));
                 } else {
                   // Copy file (with optional PDF conversion)
-                  const copiedFileName = copyFileWithOptions(file, assignmentFolder, fileName, convertToPdf);
+                  const copiedFileName = copyFileWithOptions(
+                    file,
+                    assignmentFolder,
+                    outputBaseFilename,
+                    convertToPdf,
+                    fileMetadata
+                  );
 
-                  submissionData.attachments.push({
-                    type: 'driveFile',
-                    name: copiedFileName,
-                    id: attachment.driveFile.id,
-                    sizeMB: fileSizeMB
-                  });
+                  submissionData.attachments.push(createDriveAttachmentRecord(
+                    attachment.driveFile,
+                    originalName,
+                    copiedFileName,
+                    { sizeMB: fileSizeMB }
+                  ));
                 }
               } catch (e) {
                 Logger.log("Could not copy file: " + e);
-                submissionData.attachments.push({
-                  type: 'driveFile',
-                  name: attachment.driveFile.title || 'unknown',
-                  id: attachment.driveFile.id,
-                  error: 'Could not access file'
-                });
+                submissionData.attachments.push(createDriveAttachmentRecord(
+                  attachment.driveFile,
+                  originalName,
+                  null,
+                  { error: 'Could not access file' }
+                ));
               }
             } else if (attachment.link) {
               submissionData.attachments.push({
@@ -1266,22 +1350,6 @@ function generateStudentReport(courseId, studentId, skipLargeFiles = true, conve
 }
 
 /**
- * Helper: Get clean student name
- */
-function getCleanStudentName(student) {
-  const profile = student.profile || {};
-  const name = profile.name || {};
-
-  if (name.givenName) {
-    return name.givenName + (name.familyName ? ' ' + name.familyName : '');
-  }
-  if (name.fullName) {
-    return name.fullName;
-  }
-  return profile.emailAddress || 'Unknown-' + student.userId;
-}
-
-/**
  * Helper: Format due date
  */
 function formatDueDate(dueDate) {
@@ -1303,65 +1371,172 @@ function formatDueDate(dueDate) {
 }
 
 /**
- * Helper: Sanitize filename
+ * Splits a string into user-perceived characters when supported. The fallback
+ * keeps Unicode code points and their combining marks together.
  */
-function sanitizeFilename(name) {
-  return String(name)
+function getGraphemeSegments(value) {
+  const text = String(value);
+
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    if (!graphemeSegmenter) {
+      graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    }
+    return Array.from(graphemeSegmenter.segment(text), part => part.segment);
+  }
+
+  return text.match(/\P{M}\p{M}*|\p{M}+/gu) || [];
+}
+
+/**
+ * Truncates a string without splitting surrogate pairs or combining sequences.
+ */
+function truncateByGrapheme(value, maxLength = MAX_GENERATED_STEM_GRAPHEMES) {
+  const text = String(value);
+  if (maxLength <= 0) return '';
+  if (text.length <= maxLength) return text;
+
+  return getGraphemeSegments(text).slice(0, maxLength).join('');
+}
+
+/**
+ * Applies the canonical policy for generated Drive folder and filename parts.
+ */
+function sanitizeFilename(name, options = {}) {
+  const whitespaceReplacement = options.hyphenateWhitespace ? '-' : ' ';
+  const maxLength = options.maxLength === undefined
+    ? MAX_GENERATED_STEM_GRAPHEMES
+    : options.maxLength;
+  const sanitize = value => String(value === undefined || value === null ? '' : value)
     .normalize('NFC')
-    .replace(/[<>:"/\\|?*]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/\p{Default_Ignorable_Code_Point}+/gu, ' ')
+    .replace(/[^\p{L}\p{Mn}\p{Mc}\p{N}\s_-]\p{M}*/gu, ' ')
+    .replace(/(^|[\s_-])\p{M}+/gu, '$1')
     .trim()
-    .substring(0, 100);
+    .replace(/\s+/g, whitespaceReplacement);
+
+  const sanitizedName = sanitize(name);
+  if (sanitizedName) return truncateByGrapheme(sanitizedName, maxLength);
+  if (options.allowEmpty) return '';
+  return truncateByGrapheme(sanitize(options.fallback) || 'Untitled', maxLength);
+}
+
+/** Uses collapsed spaces for generated folder names. */
+function buildFolderName(value, fallback) {
+  return sanitizeFilename(value, { fallback: fallback });
+}
+
+/** Uses hyphens for whitespace in generated file stems. */
+function buildFileStem(value, fallback) {
+  return sanitizeFilename(value, {
+    fallback: fallback,
+    hyphenateWhitespace: true
+  });
+}
+
+/**
+ * Joins readable text to a protected suffix while keeping the suffix intact.
+ */
+function joinFilenameParts(prefix, protectedSuffix) {
+  const prefixText = String(prefix || '');
+  const suffixText = String(protectedSuffix || '');
+
+  if (!prefixText) return truncateByGrapheme(suffixText);
+  if (!suffixText) return truncateByGrapheme(prefixText);
+
+  const combined = `${prefixText}_${suffixText}`;
+  if (combined.length <= MAX_GENERATED_STEM_GRAPHEMES) return combined;
+
+  const suffixSegments = getGraphemeSegments(suffixText);
+  if (suffixSegments.length >= MAX_GENERATED_STEM_GRAPHEMES) {
+    return suffixSegments.slice(-MAX_GENERATED_STEM_GRAPHEMES).join('');
+  }
+
+  const prefixLength = MAX_GENERATED_STEM_GRAPHEMES - suffixSegments.length - 1;
+  if (prefixLength <= 0) return suffixText;
+  return `${truncateByGrapheme(prefixText, prefixLength)}_${suffixText}`;
+}
+
+/**
+ * Builds a readable download stem with stable assignment and attachment tails.
+ */
+function buildAssignmentAttachmentFilename(
+  safeAssignmentTitle,
+  safeStudentName,
+  safeAssignmentId,
+  attachmentIndex,
+  attachmentCount,
+  attachmentLabel = ''
+) {
+  let assignmentPart = addAttachmentIndex(
+    safeAssignmentId,
+    attachmentIndex,
+    attachmentCount
+  );
+  if (attachmentLabel) {
+    assignmentPart = joinFilenameParts(assignmentPart, attachmentLabel);
+  }
+  const protectedSuffix = joinFilenameParts(safeStudentName, assignmentPart);
+  return joinFilenameParts(safeAssignmentTitle, protectedSuffix);
+}
+
+/**
+ * Adds a stable index only when an assignment contains multiple attachments.
+ */
+function addAttachmentIndex(baseFilename, index, attachmentCount) {
+  if (attachmentCount <= 1) return truncateByGrapheme(baseFilename);
+
+  return joinFilenameParts(baseFilename, String(index + 1));
+}
+
+/**
+ * Sanitizes the final dot suffix from a non-Google Drive filename.
+ */
+function getSafeFileExtension(fileName, mimeType) {
+  if (String(mimeType).includes('google-apps')) return '';
+
+  const name = String(fileName);
+  const dotIndex = name.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex === name.length - 1) return '';
+
+  return sanitizeFilename(name.slice(dotIndex + 1), {
+    hyphenateWhitespace: true,
+    allowEmpty: true,
+    maxLength: MAX_GENERATED_EXTENSION_GRAPHEMES
+  }).toLowerCase();
+}
+
+function getFilenameStem(fileName, mimeType) {
+  const name = String(fileName);
+  const extension = getSafeFileExtension(name, mimeType);
+  return extension ? name.slice(0, name.lastIndexOf('.')) : name;
+}
+
+function appendFileExtension(baseFilename, extension) {
+  return extension ? `${baseFilename}.${extension}` : baseFilename;
 }
 
 /**
  * Helper: Copy file with optional PDF conversion
  */
-function copyFileWithOptions(file, folder, fileName, convertToPdf) {
-  const mimeType = file.getMimeType();
+function copyFileWithOptions(file, folder, safeBaseFilename, convertToPdf, fileMetadata) {
+  const originalExtension = getSafeFileExtension(fileMetadata.name, fileMetadata.mimeType);
+  const originalName = appendFileExtension(safeBaseFilename, originalExtension);
+  const shouldConvert = convertToPdf &&
+    PDF_CONVERTIBLE_MIME_TYPES.has(fileMetadata.mimeType);
 
-  // Define convertible MIME types
-  const convertibleMimeTypes = {
-    'application/vnd.google-apps.document': true,
-    'application/vnd.google-apps.spreadsheet': true,
-    'application/vnd.google-apps.presentation': true,
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true,
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': true,
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation': true,
-    'application/msword': true,
-    'application/vnd.ms-excel': true,
-    'application/vnd.ms-powerpoint': true
-  };
+  if (!shouldConvert) {
+    file.makeCopy(originalName, folder);
+    return originalName;
+  }
 
-  const shouldConvert = convertToPdf && convertibleMimeTypes[mimeType];
-
-  if (shouldConvert) {
-    try {
-      // For Google Workspace files
-      if (mimeType.includes('google-apps')) {
-        const pdfBlob = file.getAs('application/pdf');
-        const pdfName = fileName.replace(/\.[^/.]+$/, '') + '.pdf';
-        folder.createFile(pdfBlob).setName(pdfName);
-        return pdfName;
-      }
-      // For Microsoft Office files
-      else {
-        const pdfName = fileName.replace(/\.[^/.]+$/, '') + '.pdf';
-        const pdfFile = Drive.Files.copy(
-          {title: pdfName, mimeType: 'application/pdf'},
-          file.getId(),
-          {convert: true}
-        );
-        DriveApp.getFileById(pdfFile.id).moveTo(folder);
-        return pdfName;
-      }
-    } catch (e) {
-      Logger.log("PDF conversion failed, copying original: " + e);
-      file.makeCopy(fileName, folder);
-      return fileName;
-    }
-  } else {
-    file.makeCopy(fileName, folder);
-    return fileName;
+  try {
+    const pdfBlob = file.getAs('application/pdf');
+    const pdfName = appendFileExtension(safeBaseFilename, 'pdf');
+    folder.createFile(pdfBlob).setName(pdfName);
+    return pdfName;
+  } catch (e) {
+    Logger.log("PDF conversion failed, copying original: " + e);
+    file.makeCopy(originalName, folder);
+    return originalName;
   }
 }

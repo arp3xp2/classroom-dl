@@ -6,10 +6,10 @@ A simple Google Apps Script tool that downloads student assignments from Google 
 
 - **Topic-based organization**: Download assignments from specific topics or all topics
 - **Student folders**: Creates one folder per student within each topic
-- **Consistent naming**: Files are renamed to `assignment-title_student-name.extension`
-- **PDF conversion**: Option to automatically convert compatible files (Google Docs, Sheets, Slides, and Microsoft Office files) to PDF format
+- **Consistent naming**: Downloaded files use Unicode-safe names with stable assignment IDs and attachment indices
+- **PDF conversion**: Option to convert Google Docs, Sheets, and Slides to PDF
 
-Note: PDF conversion only works for Google Workspace files and Microsoft Office formats. Other file types (images, audio, etc.) will remain in their original format.
+Microsoft Office files and other binary formats remain in their original format. A failed Google Workspace conversion also falls back to the original file.
 
 ## Screenshots
 
@@ -23,9 +23,7 @@ Note: PDF conversion only works for Google Workspace files and Microsoft Office 
 
 1. Go to [Google Apps Script](https://script.google.com/) and create a new project
 2. Copy the code from `code.gs` in this repository and paste it into your project
-3. Click on "Services" (+ icon) and add these Google services:
-   - Google Classroom API
-   - Google Drive API
+3. Click on "Services" (+ icon) and add the Google Classroom API
 4. Save the project (Ctrl+S or ⌘+S)
 5. Deploy as a web app:
    - Click "Deploy" > "New deployment"
@@ -46,21 +44,20 @@ When you first run the app, it will request the following permissions:
 
 These permissions are necessary for the app to function. The app runs under your account, so it only has access to the courses where you are a teacher or owner.
 
-## Required Google APIs
+## Required Google API
 
-This script uses the following Google APIs:
+This script uses the following advanced Google API:
 
 - **Google Classroom API**: For accessing classroom data
-- **Google Drive API**: For file operations
 
-These are automatically enabled when you add the services in the Apps Script editor.
+Drive file operations use Apps Script's built-in Drive service and do not require adding the advanced Drive API.
 
 ## Usage
 
 1. Open the web app URL
 2. Select a course from the dropdown
 3. Choose which topics to download (or select all)
-4. Optional: Check "Convert compatible files to PDF" to convert documents to PDF format
+4. Optional: Check "Convert compatible files to PDF" to convert Google Docs, Sheets, and Slides
 5. Click "Download Selected Assignments"
 6. A Google Drive folder will be created with the downloaded files
 7. Click the provided link to open the folder
@@ -73,11 +70,27 @@ The app creates the following folder structure in your Google Drive:
 Classroom Downloads - [Course Name]/
 ├── Topic 1/
 │   ├── Student A/
-│   │   └── assignment-name_student-a.ext
+│   │   ├── assignment-name_student-a_assignment-id_1.ext
+│   │   └── assignment-name_student-a_assignment-id_2_link.txt
 │   └── Student B/
-│       └── assignment-name_student-b.ext
+│       └── assignment-name_student-b_assignment-id.ext
 ├── Topic 2/
 │   └── ...
 └── Uncategorized/
     └── ...
 ```
+
+An attachment index is added when a submission contains multiple attachments. Link stubs also include a `_link` marker. Assignment IDs remain in names to prevent collisions between assignments with identical or similarly sanitized titles.
+
+## Student report attachment fields
+
+Drive-file entries in `summary.json` use these naming fields consistently:
+
+- `name` and `originalName`: the source file name in Classroom/Drive
+- `outputName`: the generated on-disk name, or `null` when the file was skipped or could not be copied
+
+Link entries retain their separate `type`, `url`, and `title` fields.
+
+## Naming compatibility note
+
+Unicode-safe naming adds assignment IDs, conditional attachment indices, and link markers. Exports created beside folders from older versions can therefore use different folder or file names; this does not modify existing exports.
