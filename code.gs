@@ -681,7 +681,7 @@ function doGet() {
     </html>
   `);
   
-  return html.setTitle('Classroom Assignment Downloader').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return html.setTitle('Classroom Assignment Downloader');
 }
 
 /**
@@ -936,15 +936,10 @@ function getStudentDisplayName(student) {
 }
 
 function getDownloadStudentNames(student, studentId) {
-  const profile = student.profile || {};
   const profileName = getStudentProfileName(student);
-
-  Logger.log("Raw student name: " + (profileName || '[missing]'));
-  Logger.log("Student profile structure: " + JSON.stringify(profile));
 
   const fallback = `Student-${studentId}`;
   const folderName = buildFolderName(profileName, fallback);
-  Logger.log("Cleaned student name: " + folderName);
 
   return {
     folderName: folderName,
@@ -1003,14 +998,13 @@ function downloadFile(driveFile, folder, baseFilename, convertToPdf) {
   try {
     const file = DriveApp.getFileById(driveFile.id);
     const fileMetadata = getDriveFileMetadata(file);
-    const newFilename = copyFileWithOptions(
+    copyFileWithOptions(
       file,
       folder,
       baseFilename,
       convertToPdf,
       fileMetadata
     );
-    Logger.log(`Copied file as: ${newFilename}`);
   } catch (error) {
     Logger.log('Error downloading file: ' + error);
   }
