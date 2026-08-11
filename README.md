@@ -1,3 +1,5 @@
+
+
 # Google Classroom Assignment Downloader
 
 A simple Google Apps Script tool that downloads student assignments from Google Classroom, organizes them by topic and student, and renames files according to a consistent format.
@@ -24,7 +26,7 @@ Microsoft Office files and other binary formats remain in their original format.
 1. Go to [Google Apps Script](https://script.google.com/) and create a new project
 2. Copy the code from `code.gs` in this repository and paste it into your project
 3. Click on "Services" (+ icon) and add the Google Classroom API
-4. Save the project (Ctrl+S or ⌘+S)
+4. In **Project Settings**, set the **Runtime version** to **V8**, then save the project (Ctrl+S or ⌘+S)
 5. Deploy as a web app:
    - Click "Deploy" > "New deployment"
    - Select "Web app" as the deployment type
